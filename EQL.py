@@ -10,6 +10,7 @@ use_cuda = torch.cuda.is_available()
 device = torch.device("cuda:0" if use_cuda else "cpu")
 torch.set_default_dtype(torch.float64)
 
+
 class DivUnit(nn.Module):
     def __init__(self, in_features, out_features, theta=0.5):
         super(DivUnit, self).__init__()
@@ -24,6 +25,7 @@ class DivUnit(nn.Module):
         y2 = y[:, self.dim:]
         res = (y2 > self.theta) * (torch.div(y1,y2))
         return res, y2
+
 
 class EQL(nn.Module):
     def __init__(self, in_feats, struct, out_feats):
@@ -87,7 +89,7 @@ def train_model(eql, dataloader, max_epochs=1000, lrate=0.001):
             rep_loss = mse(yt, y_pred)
             pen_div = (theta - y2 > 0) * (theta - y2)
             pen_div = torch.sum(pen_div)
-            if t > t1 and t < t2:
+            if t1 < t < t2:
                 l1_norm = 0
                 for param in eql.parameters():
                     l1_norm += torch.sum(torch.abs(param))
@@ -103,7 +105,9 @@ def train_model(eql, dataloader, max_epochs=1000, lrate=0.001):
 
         print('epoch: %d, loss: %.5f' % (t, epoch_loss / count))
 
+
 class TestDataset(Dataset):
+    # experiment in the paper: sin(pi * x_1) / (x_2^2 + 1)
     def __init__(self):
         self.X = np.random.uniform(-1,1,size=(10000,2))
         y = np.divide(np.sin(3.1415 * self.X[:,0]), np.power(self.X[:,1], 2) + 1)
@@ -135,7 +139,6 @@ if __name__ == "__main__":
         y_pred = y_pred.cpu()
         plt.plot(xtest[:,0], ytest, 'k-')
         plt.plot(xtest[:,0], y_pred[:,0], 'r-.')
-
 
     plt.show()
 
