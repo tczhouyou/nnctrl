@@ -4,10 +4,10 @@ import torch.nn as nn
 from torch.nn.parameter import Parameter
 from torch.nn import init
 from torch import optim
-import matplotlib.pyplot as plt
 import numpy as np
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 import math
+from DataSets import TestDatasetV1
 
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda:0" if use_cuda else "cpu")
@@ -43,11 +43,57 @@ class NALU(nn.Module):
 
 
 class NALUNet(nn.Module):
-    def __init__(self, in_features, layers, out_features):
+    def __init__(self, in_features, struct, out_features):
         super(NALUNet, self).__init__()
-        self.layers = [NALU(in_features, layers[0])]
-        for i in range(len(layers)-1):
-            self.layers.append(NALU(layers[i], layers[i+1]))
+        layers = [NALU(in_features, struct[0])]
+        for i in range(len(struct)-1):
+            layers.append(NALU(struct[i], struct[i+1]))
+
+        layers.append(NALU(struct[-1], out_features))
+        self.n_layers = len(layers)
+        self.layers = nn.ModuleList(layers)
+
+    def forward(self, input):
+        out = input
+        for i in range(self.n_layers):
+            out = self.layers[i](out)
+
+        return out
+
+    def train_model(self, dataloader, max_epochs=1000, lrate=0.001):
+        mse = nn.MSELoss()
+        optimizer = optim.Adam(self.parameters(), lr=lrate)
+        lamb = 1e-10
+        for t in range(max_epochs):
+            epoch_loss = 0
+            count = 0
+            for i, (xt, yt) in enumerate(dataloader):
+                optimizer.zero_grad()
+                y_pred = self.forward(xt)
+                rep_loss = mse(yt, y_pred)
+                l1_norm = 0
+                for param in self.parameters():
+                    l1_norm += torch.sum(torch.abs(param))
+
+                loss = rep_loss + lamb * l1_norm
+                loss.backward()
+                optimizer.step()
+                epoch_loss += loss
+                count += 1
+
+            print('epoch: %d, loss: %.5f' % (t, epoch_loss / count))
+
+
+if __name__ == "__main__":
+    struct = np.array([10,10])
+    nalu = NALUNet(2, struct, 1)
+    nalu = nalu.to(device)
+
+    dataset = TestDatasetV1()
+    nalu.train_model(DataLoader(dataset, batch_size=20, shuffle=True), max_epochs=100, lrate=0.001)
+    dataset.test_model(nalu)
+
+
 
 
 
