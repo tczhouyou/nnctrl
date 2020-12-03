@@ -1,3 +1,5 @@
+## the code is based on the paper: https://arxiv.org/abs/1808.00508
+## contact: you.zhou@kit.edu
 
 import torch
 import torch.nn as nn
@@ -85,7 +87,7 @@ class NALUNet(nn.Module):
 
 
 if __name__ == "__main__":
-    struct = np.array([10,10])
+    struct = np.array([100,100])
     nalu = NALUNet(2, struct, 1)
     nalu = nalu.to(device)
 

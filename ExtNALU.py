@@ -1,3 +1,5 @@
+## Extension of NALU with sine and cosine gate
+## contact: you.zhou@kit.edu
 
 import torch
 import torch.nn as nn

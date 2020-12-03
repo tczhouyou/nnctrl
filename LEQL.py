@@ -1,17 +1,49 @@
-## the code is based on the paper: https://arxiv.org/pdf/1806.07259.pdf
-## contact: you.zhou@kit.edu
+# LEQL: Lagrangian EQL
+# Based on EQL and Lagrangian network (https://arxiv.org/abs/2003.04630)
 
 import torch
 import torch.nn as nn
 from torch import optim
 import numpy as np
 from torch.utils.data import DataLoader
-from DataSets import TestDatasetV1
-
+from DataSets import Pendulum
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda:0" if use_cuda else "cpu")
 torch.set_default_dtype(torch.float64)
 
+## caculate jacobian and hessian (code source: https://gist.github.com/apaszke/226abdf867c4e9d6698bd198f3b45fb7)
+def jacobian(y, x):
+    jacob = []
+    for i in range(y.shape[0]):
+        bgrad = []
+        for j in range(y.shape[1]):
+            grad,  = torch.autograd.grad(y[i, j], x, retain_graph=True, create_graph=True)
+            bgrad.append(grad[i,:])
+
+        bgrad = torch.stack(bgrad)
+        jacob.append(bgrad)
+
+    return torch.squeeze(torch.stack(jacob), dim=1)
+
+def hessian(y, x0, x1):
+    hess = []
+    for i in range(y.shape[0]):
+        bgrad = []
+        for j in range(y.shape[1]):
+            grad, = torch.autograd.grad(y[i, j], x0, retain_graph=True, create_graph=True)
+            grad = grad[i,:]
+            dgrad = []
+            for k in range(grad.shape[0]):
+                dgradk, = torch.autograd.grad(grad[k], x1, retain_graph=True, create_graph=True)
+                dgrad.append(dgradk[i,:])
+
+            dgrad = torch.stack(dgrad)
+            bgrad.append(dgrad)
+
+        bgrad = torch.stack(bgrad)
+        hess.append(bgrad)
+
+    return torch.squeeze(torch.stack(hess), dim=1)
 
 class DivUnit(nn.Module):
     def __init__(self, in_features, out_features, theta=0.5):
@@ -29,41 +61,51 @@ class DivUnit(nn.Module):
         return res, y2
 
 
-class EQL(nn.Module):
-    def __init__(self, in_feats, struct, out_feats):
-        super(EQL, self).__init__()
+class LEQL(nn.Module):
+    def __init__(self, dim, struct):
+        super(LEQL, self).__init__()
         self.struct = struct
         linears = []
-        in_features = in_feats
+        in_features = dim * 2
         for i in range(np.shape(struct)[0]):
-            out_features = np.sum(struct[i,:-1]) + 2 * struct[i,-1]
+            out_features = np.sum(struct[i, :-1]) + 2 * struct[i, -1]
             linears.append(nn.Linear(in_features, out_features))
-            in_features = np.sum(struct[i,:])
+            in_features = np.sum(struct[i, :])
 
         self.n_hlayers = np.shape(struct)[0]
-        self.out_feats = out_feats
-        self.in_feats = in_feats
-        self.out = DivUnit(in_features, out_feats)
+        self.out_feats = 1
+        self.out = DivUnit(in_features, 1)
         self.linears = nn.ModuleList(linears)
+        self.dim = dim
 
     def apply_hidden_ops(self, inputs, layer_struct):
         cum_struct = np.cumsum(layer_struct)
         outputs = torch.ones([inputs.shape[0], cum_struct[-1]])
-        outputs[:,cum_struct[0]: cum_struct[1]] = torch.sin(inputs[:,cum_struct[0]: cum_struct[1]])
-        outputs[:,cum_struct[1]: cum_struct[2]] = torch.cos(inputs[:,cum_struct[1]: cum_struct[2]])
-        y_multi = inputs[:,cum_struct[2]:]
+        outputs[:, cum_struct[0]: cum_struct[1]] = torch.sin(inputs[:, cum_struct[0]: cum_struct[1]])
+        outputs[:, cum_struct[1]: cum_struct[2]] = torch.cos(inputs[:, cum_struct[1]: cum_struct[2]])
+        y_multi = inputs[:, cum_struct[2]:]
         dim = layer_struct[-1]
         outputs[:, cum_struct[2]:] = y_multi[:, :dim] * y_multi[:, dim:]
         return outputs
 
     def forward(self, x):
-        out = x
+        q = x[:, :self.dim]
+        qd = x[:, self.dim:]
+        out = torch.cat([q,qd], dim=1)
         for i in range(np.shape(self.struct)[0]):
             out = self.linears[i](out)
-            out = self.apply_hidden_ops(out, self.struct[i,:])
+            out = self.apply_hidden_ops(out, self.struct[i, :])
 
-        y_pred, y2 = self.out.forward(out)
-        return y_pred, y2
+        lg, y2 = self.out.forward(out)
+        jcob = jacobian(lg, q)
+        hmat1 = hessian(lg, qd, qd)
+        hmat2 = hessian(lg, q, qd)
+        Imat = torch.eye(hmat1.shape[1]).reshape((1,hmat1.shape[1], hmat1.shape[1])).repeat(hmat1.shape[0], 1, 1)
+        Imat = Imat.to(device)
+        invMat = torch.inverse(hmat1 + 0.001 * Imat)
+        jcobvec = torch.unsqueeze(jcob, -1) - torch.bmm(hmat2, torch.unsqueeze(q,-1))
+        qdd = torch.matmul(invMat,jcobvec)
+        return torch.squeeze(qdd, -1), y2
 
     def train_model(self, dataloader, max_epochs=1000, lrate=0.001):
         t1 = 0.25 * max_epochs
@@ -109,12 +151,10 @@ class EQL(nn.Module):
 
 if __name__ == "__main__":
     struct = np.array([[10,10,10,10]])
-    eql = EQL(2, struct, 1)
-    eql = eql.to(device)
+    leql = LEQL(1, struct)
+    leql = leql.to(device)
 
-    dataset = TestDatasetV1()
-    eql.train_model(DataLoader(dataset, batch_size=20, shuffle=True), max_epochs=200, lrate=0.001)
-    dataset.test_model(eql)
-
-
+    dataset = Pendulum()
+    leql.train_model(DataLoader(dataset, batch_size=20, shuffle=True), max_epochs=50, lrate=0.0001)
+    #dataset.test_model(eql)
 
