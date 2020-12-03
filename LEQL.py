@@ -89,8 +89,9 @@ class LEQL(nn.Module):
         return outputs
 
     def forward(self, x):
-        q = x[:, :self.dim]
-        qd = x[:, self.dim:]
+        q = x[:, :self.dim].clone().detach().requires_grad_(True).to(device)
+        qd = x[:, self.dim:].clone().detach().requires_grad_(True).to(device)
+
         out = torch.cat([q,qd], dim=1)
         for i in range(np.shape(self.struct)[0]):
             out = self.linears[i](out)
@@ -105,7 +106,7 @@ class LEQL(nn.Module):
         invMat = torch.inverse(hmat1 + 0.001 * Imat)
         jcobvec = torch.unsqueeze(jcob, -1) - torch.bmm(hmat2, torch.unsqueeze(q,-1))
         qdd = torch.matmul(invMat,jcobvec)
-        return torch.squeeze(qdd, -1), y2
+        return torch.squeeze(qdd, -1), lg, y2
 
     def train_model(self, dataloader, max_epochs=1000, lrate=0.001):
         t1 = 0.25 * max_epochs
@@ -128,7 +129,8 @@ class LEQL(nn.Module):
                     self.out.linear.weight = nn.Parameter((torch.abs(self.out.linear.weight) > 0.001) * self.out.linear.weight)
 
                 optimizer.zero_grad()
-                y_pred, y2 = self.forward(xt)
+                yt = yt.to(device)
+                y_pred, lg, y2 = self.forward(xt)
                 rep_loss = mse(yt, y_pred)
                 pen_div = (theta - y2 > 0) * (theta - y2)
                 pen_div = torch.sum(pen_div)
@@ -156,5 +158,5 @@ if __name__ == "__main__":
 
     dataset = Pendulum()
     leql.train_model(DataLoader(dataset, batch_size=20, shuffle=True), max_epochs=50, lrate=0.0001)
-    #dataset.test_model(eql)
+    dataset.test_model(leql)
 

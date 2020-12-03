@@ -42,10 +42,12 @@ class Pendulum(Dataset):
         x = np.concatenate([np.random.uniform(-np.pi/3, np.pi/3, size=(1000,1)), np.random.uniform(-np.pi/2, np.pi/2, size=(1000,1))], axis=1)
         print(np.shape(x))
         self.a = g / l
+        self.l = l
+        self.g = g
         y = np.zeros(shape=(1000, 1))
         for i in range(np.shape(x)[0]):
             th = x[i, 0]
-            th_dd = self.a * np.sin(th)
+            th_dd = - self.a * np.sin(th)
             y[i] = th_dd
 
         self.X = x
@@ -55,22 +57,26 @@ class Pendulum(Dataset):
         return len(self.y)
 
     def __getitem__(self, index):
-        x = torch.tensor(self.X[index,:], requires_grad=True).to(device)
-        y = torch.from_numpy(self.y[index,:]).to(device)
+        x = self.X[index,:]
+        y = self.y[index,:]
         return x, y
 
-
     def test_model(self, model):
-        xtest = np.concatenate([[np.linspace(-np.pi, np.pi, 1000)], [np.linspace(-np.pi, np.pi, 1000)]], axis=0)
+        xtest = np.concatenate([[np.linspace(-np.pi, np.pi, 100)], [np.linspace(-np.pi, np.pi, 100)]], axis=0)
         xtest = np.transpose(xtest)
-        ytest = self.a * np.sin(xtest[:,0])
-        with torch.no_grad():
-            y_pred = model.forward(torch.from_numpy(xtest).to(device))
-            if isinstance(y_pred, tuple):
-                y_pred = y_pred[0]
+        ytest = - self.a * np.sin(xtest[:,0])
+        ltest = 0.5 * self.l * self.l * np.power(xtest[:,1], 2) - self.g * self.l * (1 - np.cos(xtest[:,0]))
+        xtest = torch.from_numpy(xtest)
+        res = model.forward(xtest)
+        if isinstance(res, tuple):
+            y_pred = res[0]
+            l_pred = res[1]
 
-            y_pred = y_pred.cpu()
-            plt.plot(xtest[:, 0], ytest, 'k-')
-            plt.plot(xtest[:, 0], y_pred[:, 0], 'r-.')
+        y_pred = y_pred.detach().cpu()
+        l_pred = l_pred.detach().cpu()
+        plt.plot(xtest[:, 0], ytest, 'k-')
+        plt.plot(xtest[:, 0], y_pred[:, 0], 'r-.')
+        plt.plot(xtest[:, 0], ltest, 'k-')
+        plt.plot(xtest[:, 0], l_pred[:, 0], 'g-.')
 
         plt.show()
