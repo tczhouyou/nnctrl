@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch import optim
 import numpy as np
 from torch.utils.data import DataLoader
-from DataSets import TestDatasetV1
+from DataSets import Pendulum, TestDatasetV1
 
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda:0" if use_cuda else "cpu")
@@ -57,10 +57,11 @@ class EQL(nn.Module):
         return outputs
 
     def forward(self, x):
-        out = x
+        out = x.clone().detach().to(device)
         for i in range(np.shape(self.struct)[0]):
             out = self.linears[i](out)
             out = self.apply_hidden_ops(out, self.struct[i,:])
+            out = out.to(device)
 
         y_pred, y2 = self.out.forward(out)
         return y_pred, y2
@@ -85,6 +86,7 @@ class EQL(nn.Module):
 
                     self.out.linear.weight = nn.Parameter((torch.abs(self.out.linear.weight) > 0.001) * self.out.linear.weight)
 
+                yt = yt.to(device)
                 optimizer.zero_grad()
                 y_pred, y2 = self.forward(xt)
                 rep_loss = mse(yt, y_pred)
@@ -113,8 +115,7 @@ if __name__ == "__main__":
     eql = eql.to(device)
 
     dataset = TestDatasetV1()
-    eql.train_model(DataLoader(dataset, batch_size=20, shuffle=True), max_epochs=200, lrate=0.001)
+    eql.train_model(DataLoader(dataset, batch_size=20, shuffle=True), max_epochs=100, lrate=0.001)
     dataset.test_model(eql)
-
 
 

@@ -71,12 +71,45 @@ class Pendulum(Dataset):
         if isinstance(res, tuple):
             y_pred = res[0]
             l_pred = res[1]
+            l_pred = l_pred.detach().cpu()
+            plt.plot(xtest[:, 0], ltest, 'k-')
+            plt.plot(xtest[:, 0], l_pred[:, 0], 'g-.')
 
         y_pred = y_pred.detach().cpu()
-        l_pred = l_pred.detach().cpu()
         plt.plot(xtest[:, 0], ytest, 'k-')
         plt.plot(xtest[:, 0], y_pred[:, 0], 'r-.')
-        plt.plot(xtest[:, 0], ltest, 'k-')
-        plt.plot(xtest[:, 0], l_pred[:, 0], 'g-.')
+        plt.show()
+
+
+class CountDataset(Dataset):
+    # experiment: counting
+    def __init__(self):
+        self.X = np.random.uniform(0,10,size=(50,1))
+        self.y = self.X + 1
+
+    def __getitem__(self, index):
+        x = self.X[index, :]
+        y = self.y[index, :]
+        return x, y
+
+    def __len__(self):
+        return len(self.y)
+
+    def test_model(self, model):
+        xtest = np.array([np.linspace(0, 20, 20)])
+        xtest = np.transpose(xtest)
+        print(xtest)
+        ytest = xtest + 1
+        with torch.no_grad():
+            y_pred = model.forward(torch.from_numpy(xtest).to(device))
+            if isinstance(y_pred, tuple):
+                y_pred = y_pred[0]
+
+            y_pred = y_pred.cpu()
+            plt.plot(xtest[:, 0], ytest, 'k-')
+            plt.plot(xtest[:, 0], y_pred[:, 0], 'r-.')
 
         plt.show()
+
+
+

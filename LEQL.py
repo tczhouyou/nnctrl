@@ -96,6 +96,7 @@ class LEQL(nn.Module):
         for i in range(np.shape(self.struct)[0]):
             out = self.linears[i](out)
             out = self.apply_hidden_ops(out, self.struct[i, :])
+            out = out.to(device)
 
         lg, y2 = self.out.forward(out)
         jcob = jacobian(lg, q)
@@ -157,6 +158,6 @@ if __name__ == "__main__":
     leql = leql.to(device)
 
     dataset = Pendulum()
-    leql.train_model(DataLoader(dataset, batch_size=20, shuffle=True), max_epochs=50, lrate=0.0001)
+    leql.train_model(DataLoader(dataset, batch_size=20, shuffle=True), max_epochs=200, lrate=0.0001)
     dataset.test_model(leql)
 

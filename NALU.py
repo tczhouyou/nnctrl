@@ -1,4 +1,4 @@
-## the code is based on the paper: https://arxiv.org/abs/1808.00508
+## the code is based on the paper: https://arxiv.org/pdf/1806.07259.pdf
 ## contact: you.zhou@kit.edu
 
 import torch
