@@ -36,6 +36,21 @@ class TestDatasetV1(Dataset):
 
         plt.show()
 
+
+class TestEQLDataset(Dataset):
+    def __init__(self):
+        x = np.concatenate([[np.linspace(-6, 6, 1000)], [np.linspace(-6, 6, 1000)]], axis=0)
+        self.X = np.transpose(x)
+        self.Y = np.expand_dims(np.divide(np.sin(3.1415 * self.X[:, 0]), np.power(self.X[:, 1], 2) + 1), axis=1)
+
+    def __len__(self):
+        return len(self.Y)
+
+    def __getitem__(self, index):
+        x = torch.from_numpy(self.X[index, :]).to(device)
+        y = torch.from_numpy(self.Y[index, :]).to(device)
+        return x, y
+
 class Pendulum(Dataset):
     def __init__(self, l=1, g=10):
         super(Pendulum, self).__init__()

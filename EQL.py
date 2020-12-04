@@ -1,12 +1,15 @@
 ## the code is based on the paper: https://arxiv.org/pdf/1806.07259.pdf
 ## contact: you.zhou@kit.edu
-
+import os
+import click
 import torch
 import torch.nn as nn
 from torch import optim
 import numpy as np
 from torch.utils.data import DataLoader
-from DataSets import Pendulum, TestDatasetV1
+from DataSets import Pendulum, TestDatasetV1, TestEQLDataset
+import matplotlib.pyplot as plt
+from control_utils.utils import create_path
 
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda:0" if use_cuda else "cpu")
@@ -66,7 +69,7 @@ class EQL(nn.Module):
         y_pred, y2 = self.out.forward(out)
         return y_pred, y2
 
-    def train_model(self, dataloader, max_epochs=1000, lrate=0.001):
+    def train_model(self, dataloader, model_path, max_epochs=1000, lrate=0.001):
         t1 = 0.25 * max_epochs
         t2 = (19 / 20) * max_epochs
 
@@ -106,16 +109,47 @@ class EQL(nn.Module):
                 epoch_loss += loss
                 count += 1
 
+            if t % 50:
+                torch.save(self.state_dict(), model_path)
+
             print('epoch: %d, loss: %.5f' % (t, epoch_loss / count))
 
+    def test_model(self, dataset):
+        with torch.no_grad():
+            y_pred = self.forward(torch.from_numpy(dataset.X).to(device))
+            if isinstance(y_pred, tuple):
+                y_pred = y_pred[0]
 
-if __name__ == "__main__":
+            y_pred = y_pred.cpu()
+            x = np.arange(y_pred.shape[0])
+
+            for i in range(y_pred.shape[1]):
+                plt.figure()
+                plt.plot(x, dataset.Y[:, i], 'k-')
+                plt.plot(x, y_pred[:, i], 'r-.')
+                print(((y_pred[:, i] - dataset.Y[:, i]) ** 2).mean())
+            plt.show()
+
+
+@click.command()
+@click.option("--train", default=0, help="1: training, 0: testing")
+def main(train):
     struct = np.array([[10,10,10,10]])
     eql = EQL(2, struct, 1)
     eql = eql.to(device)
 
     dataset = TestDatasetV1()
-    eql.train_model(DataLoader(dataset, batch_size=20, shuffle=True), max_epochs=100, lrate=0.001)
-    dataset.test_model(eql)
+    model_path = "./saved_model/test_eql_v1"
+    create_path(model_path)
+    model_path = os.path.join(model_path, "state_dict_model.pt")
+    if train:
+        eql.train_model(DataLoader(dataset, batch_size=20, shuffle=True), model_path=model_path,  max_epochs=100, lrate=0.001)
+    else:
+        test_dataset = TestEQLDataset()
+        eql.load_state_dict(torch.load(model_path))
+        eql.test_model(test_dataset)
 
+
+if __name__ == "__main__":
+    main()
 
