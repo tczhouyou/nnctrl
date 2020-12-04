@@ -114,7 +114,8 @@ class EQL(nn.Module):
 
             print('epoch: %d, loss: %.5f' % (t, epoch_loss / count))
 
-    def test_model(self, dataset):
+    def test_model(self, dataset, model_path):
+        self.load_state_dict(torch.load(model_path))
         with torch.no_grad():
             y_pred = self.forward(torch.from_numpy(dataset.X).to(device))
             if isinstance(y_pred, tuple):
@@ -146,8 +147,7 @@ def main(train):
         eql.train_model(DataLoader(dataset, batch_size=20, shuffle=True), model_path=model_path,  max_epochs=100, lrate=0.001)
     else:
         test_dataset = TestEQLDataset()
-        eql.load_state_dict(torch.load(model_path))
-        eql.test_model(test_dataset)
+        eql.test_model(test_dataset, model_path)
 
 
 if __name__ == "__main__":
