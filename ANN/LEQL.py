@@ -2,7 +2,7 @@
 # Based on EQL and Lagrangian network (https://arxiv.org/abs/2003.04630)
 import os, inspect
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-os.sys.path.insert("..", current_dir)
+os.sys.path.insert(0, "..")
 
 import torch
 import torch.nn as nn
