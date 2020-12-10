@@ -1,5 +1,8 @@
 ## the code is based on the paper: https://arxiv.org/pdf/1806.07259.pdf
-## contact: you.zhou@kit.edu
+
+import os, inspect
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+os.sys.path.insert("..", current_dir)
 
 import torch
 import torch.nn as nn

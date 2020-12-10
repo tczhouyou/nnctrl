@@ -1,5 +1,8 @@
 ## Extension of NALU with sine and cosine gate
-## contact: you.zhou@kit.edu
+
+import os, inspect
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+os.sys.path.insert("..", current_dir)
 
 import torch
 import torch.nn as nn

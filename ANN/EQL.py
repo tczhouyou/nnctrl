@@ -1,5 +1,9 @@
 ## the code is based on the paper: https://arxiv.org/pdf/1806.07259.pdf
-## contact: you.zhou@kit.edu
+
+import os, inspect
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+os.sys.path.insert(0, "..")
+
 import os
 import click
 import torch
@@ -9,7 +13,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from DataSets import Pendulum, TestDatasetV1, TestEQLDataset
 import matplotlib.pyplot as plt
-from control_utils.utils import create_path
+from utils import create_path
 
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda:0" if use_cuda else "cpu")
@@ -140,7 +144,7 @@ def main(train):
     eql = eql.to(device)
 
     dataset = TestDatasetV1()
-    model_path = "./saved_model/test_eql_v1"
+    model_path = "../saved_model/test_eql_v1"
     create_path(model_path)
     model_path = os.path.join(model_path, "state_dict_model.pt")
     if train:
