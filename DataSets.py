@@ -2,7 +2,7 @@ from torch.utils.data import Dataset
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
-
+from abc import abstractmethod
 device = torch.device("cuda:0" if  torch.cuda.is_available() else "cpu")
 torch.set_default_dtype(torch.float64)
 
@@ -125,6 +125,113 @@ class CountDataset(Dataset):
             plt.plot(xtest[:, 0], y_pred[:, 0], 'r-.')
 
         plt.show()
+
+
+class DynamicSystem(Dataset):
+    def __init__(self):
+        super(DynamicSystem, self).__init__()
+        self.dt = 0.005
+        self.method = 'euler'
+
+    def step(self, y, dy):
+        ddy = self.dyn(y)
+        dy = dy + self.dt * ddy
+        y = y + self.dt * dy
+        return y, dy
+
+    @abstractmethod
+    def dyn(self, y):
+        raise NotImplementedError()
+
+    def __getitem__(self, index):
+        raise NotImplementedError()
+
+    def __len__(self):
+        raise NotImplementedError()
+
+class ThreeBodyProblem(DynamicSystem):
+    def __init__(self, wsize=10, m1=10, m2=10, m3=10, G=6.674):
+        super(ThreeBodyProblem, self).__init__()
+        self.y = np.random.uniform(0, wsize, size=(1000, 12))
+        self.m1 = m1
+        self.m2 = m2
+        self.m3 = m3
+        self.G = G
+        self.dy = self.dyn(self.y)
+
+    def dyn(self, y):
+        r1 = y[:, 0:2]
+        r2 = y[:, 2:4]
+        r3 = y[:, 4:6]
+
+        dy = np.zeros(shape=(np.shape(y)[0], 6))
+        dy[:, 0:2] = - self.G * self.m2 * (r1 - r2) / np.power(np.linalg.norm(r1 - r2, axis=1, keepdims=True), 3) \
+                     - self.G * self.m3 * (r1 - r3) / np.power(np.linalg.norm(r1 - r3, axis=1, keepdims=True), 3)
+        dy[:, 2:4] = - self.G * self.m3 * (r2 - r3) / np.power(np.linalg.norm(r2 - r3, axis=1, keepdims=True), 3) \
+                      - self.G * self.m1 * (r2 - r1) / np.power(np.linalg.norm(r2 - r1, axis=1, keepdims=True), 3)
+        dy[:, 4:6] = - self.G * self.m1 * (r3 - r1) / np.power(np.linalg.norm(r3 - r1, axis=1, keepdims=True), 3) \
+                       - self.G * self.m2 * (r3 - r2) / np.power(np.linalg.norm(r3 - r2, axis=1, keepdims=True), 3)
+
+        return dy
+
+    def __getitem__(self, index):
+        return self.y[index, :6], self.dy[index, :6]
+
+    def __len__(self):
+        return len(self.y)
+
+    def get_inputs(self, y):
+        batch_size = np.shape(y)[0]
+        states = np.zeros(shape=(batch_size, 2, 3))
+        rels = np.zeros(shape=(batch_size, 1, 9))
+        ext_effs = np.zeros(shape=(batch_size, 1, 3))
+
+        states[:, :, 0] = y[:, 0:2]
+        states[:, :, 1] = y[:, 2:4]
+        states[:, :, 2] = y[:, 4:6]
+
+        for i in range(3):
+            for j in range(3):
+                rels[:, :, 3*i+j] = np.linalg.norm(states[:, :, i] - states[:, :, j], axis=1, keepdims=True)
+
+        return states, rels, ext_effs
+
+    def test_model(self, model, y0, dy0, T=100):
+        yg = y0
+        dyg = dy0
+        yt = y0
+        dyt = dy0
+
+        gb1 = y0[:,0:2]
+        gb2 = y0[:,2:4]
+        gb3 = y0[:,4:6]
+
+        for i in range(T):
+            # x = torch.from_numpy(yt[:, :6]).to(device)
+            # ddy = model.forward(x)
+            # dyt = dyt + self.dt * ddy
+            # yt = yt + self.dt * dyt
+
+            ## ground truth
+            yg, dyg = self.step(yg, dyg)
+
+            gb1 = np.concatenate([gb1, yg[:,0:2]], axis=0)
+            gb2 = np.concatenate([gb2, yg[:,2:4]], axis=0)
+            gb3 = np.concatenate([gb3, yg[:,4:6]], axis=0)
+
+            plt.cla()
+            plt.plot(gb1[:,0], gb1[:,1], 'r-')
+            plt.plot(gb2[:,0], gb2[:,1], 'g-')
+            plt.plot(gb3[:,0], gb3[:,1], 'b-')
+            plt.axis([-5,5,-5,5])
+            plt.pause(0.1)
+
+
+
+
+
+
+
 
 
 
