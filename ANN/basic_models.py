@@ -7,7 +7,7 @@ torch.set_default_dtype(torch.float64)
 
 
 class FNN(nn.Module):
-    def __init__(self, n_layers, act="relu"):
+    def __init__(self, n_layers, act="leaky_relu"):
         super(FNN, self).__init__()
         layers = []
         for i in range(len(n_layers)-1):

@@ -28,6 +28,10 @@ class INN(nn.Module):
         self.act_dim = act_dim
         self.sys = sys
 
+    def mfunc(self, O, Ra):
+        batch_size = O.shape[0]
+        num_nodes = O.shape[-1]
+        num_rels = Ra.shape[-1]
         self.Rr = torch.zeros(batch_size, num_nodes, num_rels).to(device)
         self.Rs = torch.zeros(batch_size, num_nodes, num_rels).to(device)
 
@@ -39,14 +43,13 @@ class INN(nn.Module):
                     self.Rs[:, j, cnt] = 1.0
                     cnt += 1
 
-    def mfunc(self, O, Rr, Rs, Ra):
-        return torch.cat((torch.matmul(O, Rr), torch.matmul(O, Rs), Ra), 1)
+        return torch.cat((torch.matmul(O, self.Rr), torch.matmul(O, self.Rs), Ra), 1)
 
     def step(self, states, rels, ext_effs):
         # states: batch_size x state_size x num_nodes
         # rels: batch_size x rel_feat_size x num_rels
         # ext_effs: batch_size x ext_feat_size x num_nodes
-        Bmat = self.mfunc(states, self.Rr, self.Rs, rels)
+        Bmat = self.mfunc(states, rels)
         Bmat = torch.transpose(Bmat, 1, 2)
         Bmat = torch.reshape(Bmat, (-1, Bmat.shape[2]))
         e_t = self.rel_net.forward(Bmat)
@@ -90,7 +93,7 @@ class INN(nn.Module):
             if t % 50:
                 torch.save(self.state_dict(), model_path)
 
-            print('epoch: %d, loss: %.5f' % (t, epoch_loss / count))
+            print('epoch: %d, loss: %.5f' % (t, epoch_loss / count), end='\r')
 
 
 def three_body():
@@ -105,15 +108,17 @@ def three_body():
     act_dim = 2
 
     tb_sys = ThreeBodyProblem()
-    obj_net = FNN([state_size + ext_effect_size + effect_dim, 40, act_dim])
+    obj_net = FNN([state_size + ext_effect_size + effect_dim, 40, 40, act_dim])
     obj_net.to(device)
     rel_net = FNN([2 * state_size+rel_feat_size, 40, 40, effect_dim])
     rel_net.to(device)
 
     inn = INN(num_nodes, num_rels, effect_dim, act_dim, rel_net, obj_net, tb_sys)
-    #inn.train_model()
-    y0 = np.array([[1,1,2,2,1,3]])
-    dy0 = np.random.uniform(-10, 10,size=(1,6))
+    inn.train_model(max_epochs=12000, lrate=0.0001)
+
+    vig8vel = np.array([-0.9324, -0.8647])
+    y0 = np.array([[0.97, -0.243, -0.97, 0.243, 0, 0]])
+    dy0 = np.array([[-vig8vel[0]/2, -vig8vel[1]/2, -vig8vel[0]/2, -vig8vel[1]/2, vig8vel[0], vig8vel[1]]])
     tb_sys.test_model(inn, y0, dy0, T=10000)
 
 

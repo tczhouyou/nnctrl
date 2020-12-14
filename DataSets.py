@@ -130,7 +130,7 @@ class CountDataset(Dataset):
 class DynamicSystem(Dataset):
     def __init__(self):
         super(DynamicSystem, self).__init__()
-        self.dt = 0.005
+        self.dt = 0.01
         self.method = 'euler'
 
     def step(self, y, dy):
@@ -150,9 +150,9 @@ class DynamicSystem(Dataset):
         raise NotImplementedError()
 
 class ThreeBodyProblem(DynamicSystem):
-    def __init__(self, wsize=10, m1=10, m2=10, m3=10, G=6.674):
+    def __init__(self, wsize=5, m1=1, m2=1, m3=1, G=1):
         super(ThreeBodyProblem, self).__init__()
-        self.y = np.random.uniform(0, wsize, size=(1000, 12))
+        self.y = np.random.uniform(-wsize, wsize, size=(1000, 6))
         self.m1 = m1
         self.m2 = m2
         self.m3 = m3
@@ -206,11 +206,17 @@ class ThreeBodyProblem(DynamicSystem):
         gb2 = y0[:,2:4]
         gb3 = y0[:,4:6]
 
+        tgb1 = y0[:, 0:2]
+        tgb2 = y0[:, 2:4]
+        tgb3 = y0[:, 4:6]
+
+        _, axes = plt.subplots(2, 1)
         for i in range(T):
-            # x = torch.from_numpy(yt[:, :6]).to(device)
-            # ddy = model.forward(x)
-            # dyt = dyt + self.dt * ddy
-            # yt = yt + self.dt * dyt
+            x = yt[:, :6]
+            ddy = model.forward(x)
+            ddy = ddy.detach().to('cpu').numpy()
+            dyt = dyt + self.dt * ddy
+            yt = yt + self.dt * dyt
 
             ## ground truth
             yg, dyg = self.step(yg, dyg)
@@ -219,12 +225,23 @@ class ThreeBodyProblem(DynamicSystem):
             gb2 = np.concatenate([gb2, yg[:,2:4]], axis=0)
             gb3 = np.concatenate([gb3, yg[:,4:6]], axis=0)
 
-            plt.cla()
-            plt.plot(gb1[:,0], gb1[:,1], 'r-')
-            plt.plot(gb2[:,0], gb2[:,1], 'g-')
-            plt.plot(gb3[:,0], gb3[:,1], 'b-')
-            plt.axis([-5,5,-5,5])
-            plt.pause(0.1)
+            tgb1 = np.concatenate([tgb1, yt[:,0:2]], axis=0)
+            tgb2 = np.concatenate([tgb2, yt[:,2:4]], axis=0)
+            tgb3 = np.concatenate([tgb3, yt[:,4:6]], axis=0)
+
+            axes[0].cla()
+            axes[0].plot(gb1[:,0], gb1[:,1], 'r-')
+            axes[0].plot(gb2[:,0], gb2[:,1], 'g-')
+            axes[0].plot(gb3[:,0], gb3[:,1], 'b-')
+            axes[0].set(xlim=(-5,5), ylim=(-5,5))
+            plt.pause(0.01)
+
+            axes[1].cla()
+            axes[1].plot(tgb1[:, 0], tgb1[:, 1], 'r-')
+            axes[1].plot(tgb2[:, 0], tgb2[:, 1], 'g-')
+            axes[1].plot(tgb3[:, 0], tgb3[:, 1], 'b-')
+            axes[1].set(xlim=(-5, 5), ylim=(-5, 5))
+            plt.pause(0.01)
 
 
 
