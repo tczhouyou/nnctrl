@@ -53,6 +53,9 @@ class INN(nn.Module):
         Bmat = torch.transpose(Bmat, 1, 2)
         Bmat = torch.reshape(Bmat, (-1, Bmat.shape[2]))
         e_t = self.rel_net.forward(Bmat)
+        if isinstance(e_t, tuple):
+            e_t = e_t[0]
+
         e_t = torch.reshape(e_t, (-1, self.num_rels, self.effect_dim))
         e_t = torch.transpose(e_t, 1, 2)
         Rr_trans = torch.transpose(self.Rr, 1, 2)
@@ -61,6 +64,9 @@ class INN(nn.Module):
         c_agg = torch.transpose(c_agg, 1, 2)
         c_agg = torch.reshape(c_agg, (-1, c_agg.shape[2]))
         ostates = self.obj_net.forward(c_agg)
+        if isinstance(ostates, tuple):
+            ostates = ostates[0]
+
         ostates = torch.reshape(ostates, (-1, self.num_nodes * self.act_dim))
         # ostates = torch.transpose(ostates, 1, 2)
         return ostates
@@ -74,7 +80,7 @@ class INN(nn.Module):
             return self.step(states, rels, ext_effs)
 
     def train_model(self, model_path='test', max_epochs=1000, lrate=0.001):
-        dataloader = DataLoader(self.sys, batch_size=20, shuffle=True)
+        dataloader = DataLoader(self.sys, batch_size=50, shuffle=True)
         mse = nn.MSELoss()
         optimizer = optim.Adam(self.parameters(), lr=lrate)
         for t in range(max_epochs):
@@ -107,14 +113,24 @@ def three_body():
     ext_effect_size = 1
     act_dim = 2
 
-    tb_sys = ThreeBodyProblem()
-    obj_net = FNN([state_size + ext_effect_size + effect_dim, 40, 40, act_dim])
+    tb_sys = ThreeBodyProblem(wsize=5)
+
+    feat_in = state_size + ext_effect_size + effect_dim
+    feat_out = act_dim
+    #obj_net = FNN([feat_in, 40, 40, feat_out])
+    struct = np.array([[10,10,10,10], [10, 10, 10, 10]])
+    obj_net = EQL(feat_in, struct, feat_out)
     obj_net.to(device)
-    rel_net = FNN([2 * state_size+rel_feat_size, 40, 40, effect_dim])
+
+    feat_in = 2 * state_size+rel_feat_size
+    feat_out = effect_dim
+    #rel_net = FNN([feat_in, 40, 40, feat_out])
+    struct = np.array([[10, 10, 10, 10]])
+    rel_net = EQL(feat_in, struct, feat_out)
     rel_net.to(device)
 
     inn = INN(num_nodes, num_rels, effect_dim, act_dim, rel_net, obj_net, tb_sys)
-    inn.train_model(max_epochs=12000, lrate=0.0001)
+    inn.train_model(max_epochs=10000, lrate=0.0001)
 
     vig8vel = np.array([-0.9324, -0.8647])
     y0 = np.array([[0.97, -0.243, -0.97, 0.243, 0, 0]])
