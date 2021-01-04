@@ -56,6 +56,7 @@ class EQL(nn.Module):
     def apply_hidden_ops(self, inputs, layer_struct):
         cum_struct = np.cumsum(layer_struct)
         outputs = torch.ones([inputs.shape[0], cum_struct[-1]])
+        outputs[:,:cum_struct[0]] = inputs[:,:cum_struct[0]]
         outputs[:,cum_struct[0]: cum_struct[1]] = torch.sin(inputs[:,cum_struct[0]: cum_struct[1]])
         outputs[:,cum_struct[1]: cum_struct[2]] = torch.cos(inputs[:,cum_struct[1]: cum_struct[2]])
         y_multi = inputs[:,cum_struct[2]:]
